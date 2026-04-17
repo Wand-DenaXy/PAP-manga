@@ -45,7 +45,68 @@ $ultimosContactos = $pdo->query(
      ORDER BY criado_em DESC LIMIT 6'
 )->fetchAll(PDO::FETCH_ASSOC);
 
-require_once '../assets/includes/navbar.php';
+// ── Livros comprados por cliente ───────────────────────────────
+$comprasPorCliente = $pdo->query("
+    SELECT u.id AS cliente_id, u.nome AS cliente, u.email,
+           GROUP_CONCAT(DISTINCT p.nome SEPARATOR '||') AS livros,
+           COUNT(DISTINCT e.id) AS total_encomendas,
+           SUM(ei.quantidade) AS total_itens
+    FROM encomendas e
+    JOIN encomenda_itens ei ON ei.encomenda_id = e.id
+    JOIN produtos p ON p.id = ei.produto_id
+    JOIN utilizadores u ON u.id = e.utilizador_id
+    WHERE e.estado != 'cancelada'
+    GROUP BY u.id
+    ORDER BY total_encomendas DESC
+    LIMIT 20
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// ── Dados para gráficos ───────────────────────────────────────
+
+// Vendas dos últimos 7 meses
+$vendasMensais = $pdo->query("
+    SELECT DATE_FORMAT(criado_em, '%Y-%m') AS mes,
+           COUNT(*) AS total_encomendas,
+           COALESCE(SUM(total), 0) AS receita
+    FROM encomendas
+    WHERE estado != 'cancelado'
+    GROUP BY mes
+    ORDER BY mes DESC
+    LIMIT 7
+")->fetchAll(PDO::FETCH_ASSOC);
+$vendasMensais = array_reverse($vendasMensais);
+
+// Produtos por categoria
+$produtosPorCategoria = $pdo->query("
+    SELECT c.nome, COUNT(p.id) AS total
+    FROM categorias c
+    LEFT JOIN produtos p ON p.categoria_id = c.id AND p.ativo = 1
+    GROUP BY c.id
+    ORDER BY total DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// Encomendas por estado
+$encomendasPorEstado = $pdo->query("
+    SELECT estado, COUNT(*) AS total
+    FROM encomendas
+    GROUP BY estado
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// Tickets por estado
+$ticketsPorEstado = $pdo->query("
+    SELECT estado, COUNT(*) AS total
+    FROM suporte_tickets
+    GROUP BY estado
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// Novos registos últimos 7 dias
+$registosDiarios = $pdo->query("
+    SELECT DATE(criado_em) AS dia, COUNT(*) AS total
+    FROM utilizadores
+    WHERE criado_em >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    GROUP BY dia
+    ORDER BY dia
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -57,6 +118,7 @@ require_once '../assets/includes/navbar.php';
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --white: #ffffff; --off-white: #f7f7f5; --black: #0a0a0a;
@@ -103,14 +165,14 @@ require_once '../assets/includes/navbar.php';
     }
     .stat-card {
       background: var(--white); border: 1.5px solid var(--card-border); border-radius: 12px;
-      padding: 28px 24px; position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+      padding: 20px 18px; position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
     }
     .stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.08); }
     .stat-card.accent { border-color: var(--accent); background: #fff5f6; }
-    .stat-icon { font-size: 1.8rem; margin-bottom: 14px; }
+    .stat-icon { font-size: 1.4rem; margin-bottom: 10px; }
     .stat-value {
-      font-family: var(--font-display); font-size: 2rem; font-weight: 900;
-      line-height: 1; margin-bottom: 6px;
+      font-family: var(--font-display); font-size: 1.5rem; font-weight: 900;
+      line-height: 1; margin-bottom: 4px;
     }
     .stat-card.accent .stat-value { color: var(--accent); }
     .stat-label {
@@ -180,12 +242,46 @@ require_once '../assets/includes/navbar.php';
     .contacto-card .assunto { font-size: 0.85rem; color: var(--black); margin-bottom: 6px; }
     .contacto-card .data { font-family: var(--font-mono); font-size: 0.58rem; color: var(--grey); letter-spacing: 0.08em; }
 
+    /* ─── COMPRAS POR CLIENTE ─── */
+    .compras-section { padding: 40px 64px; }
+    .livros-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .livro-badge {
+      background: var(--off-white); border: 1px solid var(--card-border); border-radius: 6px;
+      padding: 3px 10px; font-size: 0.72rem; font-family: var(--font-body); color: var(--black);
+    }
+    .btn-toggle-livros {
+      background: var(--black); color: var(--white); border: none; border-radius: 4px;
+      padding: 5px 14px; font-family: var(--font-mono); font-size: 0.6rem;
+      letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-toggle-livros:hover { background: var(--accent); }
+
     /* ─── EMPTY STATE ─── */
     .empty-row td { text-align: center; color: var(--grey); font-size: 0.82rem; padding: 28px; }
 
+    /* ─── CHARTS ─── */
+    .charts-section { padding: 16px 64px 16px; }
+    .charts-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+    .chart-card {
+      background: var(--white); border: 1.5px solid var(--card-border); border-radius: 10px;
+      overflow: hidden;
+    }
+    .chart-card-header {
+      padding: 8px 14px 6px; border-bottom: 1.5px solid var(--light-grey);
+    }
+    .chart-card-title {
+      font-family: var(--font-mono); font-size: 0.58rem; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--black); font-weight: 700;
+    }
+    .chart-card-body { padding: 8px 10px; position: relative; }
+    .charts-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
     @media (max-width: 1100px) {
-      .admin-header, .stats-section, .tables-section, .contactos-section { padding-left: 24px; padding-right: 24px; }
+      .admin-header, .stats-section, .tables-section, .contactos-section, .charts-section { padding-left: 24px; padding-right: 24px; }
       .tables-grid { grid-template-columns: 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .charts-grid-3 { grid-template-columns: 1fr; }
     }
     @media (max-width: 768px) {
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -193,6 +289,8 @@ require_once '../assets/includes/navbar.php';
   </style>
 </head>
 <body>
+
+<?php require_once '../assets/includes/navbar.php'; ?>
 
 <div class="admin-wrap">
 
@@ -234,12 +332,65 @@ require_once '../assets/includes/navbar.php';
         <div class="stat-icon">✉️</div>
         <div class="stat-value"><?= number_format($stats['contactos']) ?></div>
         <div class="stat-label">Contactos</div>
-        <a href="../contacto.html" class="stat-link">Ver formulário →</a>
+        <a href="../contacto.php" class="stat-link">Ver formulário →</a>
       </div>
       <div class="stat-card accent">
         <div class="stat-icon">💶</div>
         <div class="stat-value"><?= number_format($stats['receita'], 2, ',', '.') ?>€</div>
         <div class="stat-label">Receita Total</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CHARTS ─── -->
+  <section class="charts-section">
+    <div class="charts-grid" style="margin-bottom:14px;">
+      <!-- Receita Mensal -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span class="chart-card-title">// Receita Mensal</span>
+        </div>
+        <div class="chart-card-body">
+          <canvas id="chart-receita" height="80"></canvas>
+        </div>
+      </div>
+      <!-- Produtos por Categoria -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span class="chart-card-title">// Produtos por Categoria</span>
+        </div>
+        <div class="chart-card-body" style="display:flex;align-items:center;justify-content:center;">
+          <canvas id="chart-categorias" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="charts-grid-3">
+      <!-- Encomendas por Estado -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span class="chart-card-title">// Encomendas por Estado</span>
+        </div>
+        <div class="chart-card-body" style="display:flex;align-items:center;justify-content:center;">
+          <canvas id="chart-encomendas" height="60"></canvas>
+        </div>
+      </div>
+      <!-- Tickets por Estado -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span class="chart-card-title">// Tickets por Estado</span>
+        </div>
+        <div class="chart-card-body" style="display:flex;align-items:center;justify-content:center;">
+          <canvas id="chart-tickets" height="60"></canvas>
+        </div>
+      </div>
+      <!-- Novos Registos -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <span class="chart-card-title">// Registos (7 dias)</span>
+        </div>
+        <div class="chart-card-body">
+          <canvas id="chart-registos" height="60"></canvas>
+        </div>
       </div>
     </div>
   </section>
@@ -332,13 +483,90 @@ require_once '../assets/includes/navbar.php';
   </section>
   <?php endif; ?>
 
+  <!-- ─── COMPRAS POR CLIENTE ─── -->
+  <?php if (!empty($comprasPorCliente)): ?>
+  <section class="compras-section">
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span class="panel-card-title">// Livros Comprados por Cliente</span>
+      </div>
+      <table class="panel-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Email</th>
+            <th>Encomendas</th>
+            <th>Itens</th>
+            <th>Livros</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($comprasPorCliente as $cc): ?>
+            <?php $livros = explode('||', $cc['livros']); ?>
+            <tr>
+              <td><?= htmlspecialchars($cc['cliente']) ?></td>
+              <td class="td-mono" style="font-size:0.7rem"><?= htmlspecialchars($cc['email']) ?></td>
+              <td class="td-mono"><?= (int)$cc['total_encomendas'] ?></td>
+              <td class="td-mono"><?= (int)$cc['total_itens'] ?></td>
+              <td>
+                <button class="btn-toggle-livros" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'flex':'none'">
+                  Ver Livros (<?= count($livros) ?>) →
+                </button>
+                <div class="livros-list" style="display:none">
+                  <?php foreach ($livros as $livro): ?>
+                    <span class="livro-badge"><?= htmlspecialchars($livro) ?></span>
+                  <?php endforeach; ?>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <?php endif; ?>
+
 </div><!-- /.admin-wrap -->
 
 <!-- ─── FOOTER ─── -->
-<footer style="background:var(--black);color:white;padding:28px 64px;display:flex;align-items:center;justify-content:space-between;margin-top:auto;">
-  <span style="font-family:var(--font-display);font-size:1rem;font-weight:900;letter-spacing:0.08em;">Manga<span style="color:#e8002d;">Verse</span></span>
-  <span style="font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.1em;color:rgba(255,255,255,0.3);">PAINEL ADMIN — ACESSO RESTRITO</span>
-</footer>
+<?php require_once '../assets/includes/footer.php'; ?>
+
+<script>
+// ── Chart.js Init ──
+const accent = '#e8002d';
+const accentSoft = 'rgba(232,0,45,.15)';
+const chartColors = ['#e8002d','#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff','#ff9f40'];
+
+// Receita Mensal (line)
+const receitaRaw = <?= json_encode($vendasMensais) ?>;
+const receitaLabels = receitaRaw.map(r => r.mes);
+const receitaData = receitaRaw.map(r => parseFloat(r.receita));
+new Chart(document.getElementById('chart-receita'),{type:'line',data:{labels:receitaLabels,datasets:[{label:'Receita (€)',data:receitaData,borderColor:accent,backgroundColor:accentSoft,fill:true,tension:.35,pointRadius:4,pointBackgroundColor:accent}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'€'+v}},x:{grid:{display:false}}}}});
+
+// Produtos por Categoria (doughnut)
+const catRaw = <?= json_encode($produtosPorCategoria) ?>;
+const catLabels = catRaw.map(c => c.nome);
+const catData = catRaw.map(c => parseInt(c.total));
+new Chart(document.getElementById('chart-categorias'),{type:'doughnut',data:{labels:catLabels,datasets:[{data:catData,backgroundColor:chartColors.slice(0,catLabels.length),borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#999',font:{size:11}}}}}});
+
+// Encomendas por Estado (pie)
+const encRaw = <?= json_encode($encomendasPorEstado) ?>;
+const encLabels = encRaw.map(e => e.estado);
+const encData = encRaw.map(e => parseInt(e.total));
+new Chart(document.getElementById('chart-encomendas'),{type:'pie',data:{labels:encLabels,datasets:[{data:encData,backgroundColor:chartColors.slice(0,encLabels.length),borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#999',font:{size:11}}}}}});
+
+// Tickets por Estado (pie)
+const tickRaw = <?= json_encode($ticketsPorEstado) ?>;
+const tickLabels = tickRaw.map(t => t.estado);
+const tickData = tickRaw.map(t => parseInt(t.total));
+new Chart(document.getElementById('chart-tickets'),{type:'pie',data:{labels:tickLabels,datasets:[{data:tickData,backgroundColor:chartColors.slice(0,tickLabels.length),borderWidth:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#999',font:{size:11}}}}}});
+
+// Registos Diários (bar)
+const regRaw = <?= json_encode($registosDiarios) ?>;
+const regLabels = regRaw.map(r => r.dia);
+const regData = regRaw.map(r => parseInt(r.total));
+new Chart(document.getElementById('chart-registos'),{type:'bar',data:{labels:regLabels,datasets:[{label:'Novos Utilizadores',data:regData,backgroundColor:accent,borderRadius:6,barPercentage:.6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}},x:{grid:{display:false}}}}});
+</script>
 
 </body>
 </html>

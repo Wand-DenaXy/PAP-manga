@@ -72,9 +72,22 @@ switch ($acao) {
         break;
 
     case 'checkout':
-        $stripePaymentId = $_POST['stripe_payment_id'] ?? null;
-        $result = ModelCarrinho::criarEncomenda($userId, $stripePaymentId);
-        jsonResponse($result);
+    case 'finalizar':
+        $metodo       = $_POST['metodo_pagamento'] ?? 'cartao';
+        $stripeToken  = $_POST['stripe_token'] ?? null;
+        $morada       = trim($_POST['morada'] ?? '');
+        $cidade       = trim($_POST['cidade'] ?? '');
+        $codigoPostal = trim($_POST['codigo_postal'] ?? '');
+        $telefone     = trim($_POST['telefone'] ?? '');
+        $codigoPromo  = $_POST['codigo_promo'] ?? '';
+
+        $result = ModelCarrinho::criarEncomenda($userId, $stripeToken, $metodo, $morada, $cidade, $codigoPostal, $telefone);
+
+        if ($result['success']) {
+            jsonResponse($result);
+        } else {
+            jsonResponse($result, 400);
+        }
         break;
 
     case 'encomendas':

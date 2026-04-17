@@ -199,10 +199,7 @@ if (isLoggedIn()) { header('Location: marketplace.php'); exit; }
   </div>
 
   <!-- ═══ FOOTER ═══ -->
-  <footer>
-    <span class="footer-logo">Manga<span>Verse</span></span>
-    <span class="footer-copy">© 2026 MangaVerse. Todos os direitos reservados.</span>
-  </footer>
+  <?php require_once 'assets/includes/footer.php'; ?>
 
   <script>
   $(document).ready(function() {

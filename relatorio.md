@@ -253,7 +253,7 @@ PAP-manga/
 
 ### Credenciais de teste
 - **Email:** admin@mangaverse.pt
-- **Password:** 123456
+- **Password:** z
 
 ### Códigos promocionais
 - `MANGA10` — 10% desconto

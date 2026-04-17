@@ -2,7 +2,7 @@
 // ════════════════════════════════════════════════════════
 //  Controller — Suporte
 //  Endpoint: assets/controller/controllerSuporte.php
-//  Ações: criar, listar, detalhe, responder, faq
+//  Ações: criar, listar, listar_todos, detalhe, responder, fechar, faq
 // ════════════════════════════════════════════════════════
 require_once __DIR__ . '/../model/modelSuporte.php';
 
@@ -12,22 +12,24 @@ $acao = $_POST['acao'] ?? $_GET['acao'] ?? '';
 
 switch ($acao) {
     case 'criar':
-        $nome       = trim($_POST['nome'] ?? '');
-        $email      = trim($_POST['email'] ?? '');
+        if (!isLoggedIn()) {
+            jsonResponse(['success' => false, 'message' => 'Tens de fazer login para criar um ticket.'], 401);
+        }
+
+        $user = getLoggedUser();
+        $nome       = $user['nome'];
+        $email      = $user['email'];
         $categoria  = $_POST['categoria'] ?? 'outro';
         $prioridade = $_POST['prioridade'] ?? 'media';
         $assunto    = trim($_POST['assunto'] ?? '');
         $mensagem   = trim($_POST['mensagem'] ?? '');
 
-        if (empty($nome) || empty($email) || empty($assunto) || empty($mensagem)) {
-            jsonResponse(['success' => false, 'message' => 'Todos os campos obrigatórios devem ser preenchidos.'], 400);
-        }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            jsonResponse(['success' => false, 'message' => 'Email inválido.'], 400);
+        if (empty($assunto) || empty($mensagem)) {
+            jsonResponse(['success' => false, 'message' => 'O assunto e a mensagem são obrigatórios.'], 400);
         }
 
         $dados = [
-            'utilizador_id' => isLoggedIn() ? $_SESSION['user_id'] : null,
+            'utilizador_id' => $_SESSION['user_id'],
             'nome'          => $nome,
             'email'         => $email,
             'categoria'     => $categoria,
@@ -44,16 +46,40 @@ switch ($acao) {
         if (!isLoggedIn()) {
             jsonResponse(['success' => false, 'message' => 'Não autenticado.'], 401);
         }
-        $tickets = ModelSuporte::getTickets($_SESSION['user_id']);
+
+        if (($_SESSION['user_role'] ?? '') === 'admin') {
+            $tickets = ModelSuporte::getAllTickets();
+        } else {
+            $tickets = ModelSuporte::getTickets($_SESSION['user_id']);
+        }
+        jsonResponse(['success' => true, 'tickets' => $tickets]);
+        break;
+
+    case 'listar_todos':
+        requireRole(['admin']);
+        $tickets = ModelSuporte::getAllTickets();
         jsonResponse(['success' => true, 'tickets' => $tickets]);
         break;
 
     case 'detalhe':
-        $ticketId = intval($_GET['id'] ?? 0);
+        if (!isLoggedIn()) {
+            jsonResponse(['success' => false, 'message' => 'Não autenticado.'], 401);
+        }
+
+        $ticketId = intval($_POST['ticket_id'] ?? $_GET['ticket_id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
         if ($ticketId <= 0) {
             jsonResponse(['success' => false, 'message' => 'ID inválido.'], 400);
         }
+
         $ticket = ModelSuporte::getTicket($ticketId);
+        if (!$ticket) {
+            jsonResponse(['success' => false, 'message' => 'Ticket não encontrado.'], 404);
+        }
+
+        if (($_SESSION['user_role'] ?? '') !== 'admin' && $ticket['utilizador_id'] != $_SESSION['user_id']) {
+            jsonResponse(['success' => false, 'message' => 'Acesso negado.'], 403);
+        }
+
         $respostas = ModelSuporte::getRespostas($ticketId);
         jsonResponse(['success' => true, 'ticket' => $ticket, 'respostas' => $respostas]);
         break;
@@ -69,7 +95,40 @@ switch ($acao) {
             jsonResponse(['success' => false, 'message' => 'Dados inválidos.'], 400);
         }
 
-        $result = ModelSuporte::responder($ticketId, $_SESSION['user_id'], $mensagem);
+        $ticket = ModelSuporte::getTicket($ticketId);
+        if (!$ticket) {
+            jsonResponse(['success' => false, 'message' => 'Ticket não encontrado.'], 404);
+        }
+
+        $isAdmin = (($_SESSION['user_role'] ?? '') === 'admin');
+        if (!$isAdmin && $ticket['utilizador_id'] != $_SESSION['user_id']) {
+            jsonResponse(['success' => false, 'message' => 'Acesso negado.'], 403);
+        }
+
+        $result = ModelSuporte::responder($ticketId, $_SESSION['user_id'], $mensagem, $isAdmin);
+        jsonResponse($result);
+        break;
+
+    case 'fechar':
+        if (!isLoggedIn()) {
+            jsonResponse(['success' => false, 'message' => 'Não autenticado.'], 401);
+        }
+        $ticketId = intval($_POST['ticket_id'] ?? 0);
+        if ($ticketId <= 0) {
+            jsonResponse(['success' => false, 'message' => 'ID inválido.'], 400);
+        }
+
+        $ticket = ModelSuporte::getTicket($ticketId);
+        if (!$ticket) {
+            jsonResponse(['success' => false, 'message' => 'Ticket não encontrado.'], 404);
+        }
+
+        $isAdmin = (($_SESSION['user_role'] ?? '') === 'admin');
+        if (!$isAdmin && $ticket['utilizador_id'] != $_SESSION['user_id']) {
+            jsonResponse(['success' => false, 'message' => 'Acesso negado.'], 403);
+        }
+
+        $result = ModelSuporte::fecharTicket($ticketId);
         jsonResponse($result);
         break;
 

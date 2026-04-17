@@ -134,11 +134,7 @@ $basePath    = '';
     .faq-toggle { font-family: var(--font-mono); font-size: 1.1rem; color: var(--grey); transition: transform 0.2s; flex-shrink: 0; }
     .faq-answer { display: none; margin-top: 14px; font-size: 0.82rem; line-height: 1.7; color: var(--grey); padding-top: 14px; border-top: 1px solid var(--card-border); }
 
-    /* ─── FOOTER ─── */
-    footer { background: var(--black); color: white; padding: 40px 80px; display: flex; align-items: center; justify-content: space-between; }
-    .footer-logo { font-family: var(--font-display); font-size: 1rem; font-weight: 900; letter-spacing: 0.08em; }
-    .footer-logo span { color: var(--accent); }
-    .footer-copy { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); }
+    /* ─── FOOTER (via footer.php) ─── */
 
     @media (max-width: 900px) {
       nav { padding: 0 24px; }
@@ -156,7 +152,6 @@ $basePath    = '';
 
   <!-- ═══ NAVBAR ═══ -->
   <?php require_once 'assets/includes/navbar.php'; ?>
-  </nav>
 
   <div class="page-wrap">
 
@@ -310,10 +305,7 @@ $basePath    = '';
   </div>
 
   <!-- ═══ FOOTER ═══ -->
-  <footer>
-    <span class="footer-logo">Manga<span>Verse</span></span>
-    <span class="footer-copy">© 2026 MangaVerse. Todos os direitos reservados.</span>
-  </footer>
+  <?php require_once 'assets/includes/footer.php'; ?>
 
   <script>
   $(document).ready(function() {
@@ -445,7 +437,7 @@ $basePath    = '';
           // Responses
           if (res.respostas) {
             res.respostas.forEach(function(r) {
-              var isAdmin = r.tipo === 'admin';
+              var isAdmin = r.is_admin == 1;
               msgList.append(
                 '<div class="message-bubble ' + (isAdmin ? 'msg-admin' : 'msg-user') + '">' +
                   '<div class="msg-author">' + (isAdmin ? 'Suporte MangaVerse' : 'Tu') + '</div>' +

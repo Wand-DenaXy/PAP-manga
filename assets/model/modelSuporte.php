@@ -47,6 +47,22 @@ class ModelSuporte {
     }
 
     /**
+     * Obter todos os tickets (admin)
+     */
+    public static function getAllTickets() {
+        $db = getDB();
+        $stmt = $db->query("
+            SELECT t.*, u.nome AS utilizador_nome
+            FROM suporte_tickets t
+            LEFT JOIN utilizadores u ON t.utilizador_id = u.id
+            ORDER BY
+                CASE t.estado WHEN 'aberto' THEN 0 WHEN 'em_progresso' THEN 1 ELSE 2 END,
+                t.criado_em DESC
+        ");
+        return $stmt->fetchAll();
+    }
+
+    /**
      * Obter ticket por ID
      */
     public static function getTicket($ticketId) {
@@ -83,12 +99,22 @@ class ModelSuporte {
         ");
         $stmt->execute([$ticketId, $userId, $mensagem, $isAdmin ? 1 : 0]);
 
-        // Atualizar estado do ticket
+        // Update ticket state
         $estado = $isAdmin ? 'em_progresso' : 'aberto';
         $stmt2 = $db->prepare("UPDATE suporte_tickets SET estado = ? WHERE id = ?");
         $stmt2->execute([$estado, $ticketId]);
 
         return ['success' => true, 'message' => 'Resposta enviada.'];
+    }
+
+    /**
+     * Fechar ticket
+     */
+    public static function fecharTicket($ticketId) {
+        $db = getDB();
+        $stmt = $db->prepare("UPDATE suporte_tickets SET estado = 'fechado' WHERE id = ?");
+        $stmt->execute([$ticketId]);
+        return ['success' => true, 'message' => 'Ticket fechado com sucesso.'];
     }
 
     /**

@@ -1,132 +1,76 @@
 <?php
 // ════════════════════════════════════════════════════════
-//  MangaVerse — Configuração da Base de Dados
+//  MangaVerse — Configuração & Helpers
 // ════════════════════════════════════════════════════════
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'mangaverse_db');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
-
-// Stripe API Keys (substituir por chaves reais em produção)
-define('STRIPE_PUBLIC_KEY', 'pk_test_XXXXXXXXXXXXXXXXXXXX');
-define('STRIPE_SECRET_KEY', 'sk_test_XXXXXXXXXXXXXXXXXXXX');
-
-// Configurações gerais
-define('SITE_NAME', 'MangaVerse');
-define('SITE_URL', 'http://localhost/PAP-manga');
-
-/**
- * Conexão PDO à base de dados
- */
-function getDB() {
+// ── Conexão PDO (singleton) ──────────────────────────────
+function getDB(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        try {
-            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES   => false,
-            ]);
-        } catch (PDOException $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Erro de conexão à base de dados.']);
-            exit;
-        }
+        $dsn = 'mysql:host=localhost;dbname=mangaverse_db;charset=utf8mb4';
+        $pdo = new PDO($dsn, 'root', '', [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
     }
     return $pdo;
 }
 
-/**
- * Iniciar sessão se ainda não estiver ativa
- */
-function initSession() {
+// ── Sessão ───────────────────────────────────────────────
+function initSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
 }
 
-/**
- * Verificar se o utilizador está autenticado
- */
-function isLoggedIn() {
+// ── Utilizador autenticado ───────────────────────────────
+function isLoggedIn(): bool {
     initSession();
-    return isset($_SESSION['user_id']);
+    return !empty($_SESSION['user_id']);
 }
 
-/**
- * Obter dados do utilizador autenticado
- */
-function getLoggedUser() {
+function getLoggedUser(): ?array {
     initSession();
     if (!isLoggedIn()) return null;
     return [
         'id'    => $_SESSION['user_id'],
-        'nome'  => $_SESSION['user_nome'],
-        'email' => $_SESSION['user_email'],
-        'role'  => $_SESSION['user_role']
+        'nome'  => $_SESSION['user_nome']  ?? '',
+        'email' => $_SESSION['user_email'] ?? '',
+        'role'  => $_SESSION['user_role']  ?? 'cliente',
     ];
 }
 
-// ─── RBAC ────────────────────────────────────────────────
-
-/**
- * Verifica se o utilizador tem role admin
- */
-function isAdmin(): bool {
+// ── Autorização por role ─────────────────────────────────
+function requireRole(array $roles): void {
     initSession();
-    return isLoggedIn() && ($_SESSION['user_role'] ?? '') === 'admin';
-}
-
-/**
- * Verifica se o utilizador pode vender (vendedor ou admin)
- */
-function isVendedor(): bool {
-    initSession();
-    return isLoggedIn() && in_array($_SESSION['user_role'] ?? '', ['vendedor', 'admin']);
-}
-
-/**
- * Redireciona para login se não autenticado
- */
-function requireLogin(string $redirect = 'login.php'): void {
-    initSession();
-    if (!isLoggedIn()) {
-        header('Location: ' . $redirect);
-        exit;
+    if (!isLoggedIn() || !in_array($_SESSION['user_role'] ?? '', $roles, true)) {
+        jsonResponse(['success' => false, 'message' => 'Acesso negado.'], 403);
     }
 }
 
-/**
- * Redireciona se não for admin
- */
-function requireAdmin(string $base = ''): void {
-    requireLogin($base . 'login.php');
-    if (!isAdmin()) {
-        header('Location: ' . $base . 'index.html?erro=sem_permissao');
-        exit;
+function requireAdmin(string $redirect = ''): void {
+    initSession();
+    if (!isLoggedIn() || ($_SESSION['user_role'] ?? '') !== 'admin') {
+        if ($redirect) {
+            header('Location: ' . $redirect . 'login.php');
+            exit;
+        }
+        jsonResponse(['success' => false, 'message' => 'Acesso negado.'], 403);
     }
 }
 
-/**
- * Requer um dos roles especificados (array de strings)
- */
-function requireRole(array $roles, string $base = ''): void {
-    requireLogin($base . 'login.php');
-    if (!in_array($_SESSION['user_role'] ?? '', $roles)) {
-        header('Location: ' . $base . 'index.html?erro=sem_permissao');
-        exit;
-    }
-}
-
-/**
- * Resposta JSON
- */
-function jsonResponse($data, $code = 200) {
-    http_response_code($code);
+// ── Resposta JSON ────────────────────────────────────────
+function jsonResponse(array $data, int $status = 200): void {
+    http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// ── Compatibilidade: manter $conn para código legado ─────
+$conn = new mysqli('localhost', 'root', '', 'mangaverse_db');
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+?>

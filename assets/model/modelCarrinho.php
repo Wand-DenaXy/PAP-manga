@@ -95,7 +95,7 @@ class ModelCarrinho {
     /**
      * Criar encomenda
      */
-    public static function criarEncomenda($userId, $stripePaymentId = null) {
+    public static function criarEncomenda($userId, $stripePaymentId = null, $metodo = 'cartao', $morada = '', $cidade = '', $codigoPostal = '', $telefone = '') {
         $db = getDB();
         $carrinho = self::getCarrinho($userId);
 
@@ -116,10 +116,10 @@ class ModelCarrinho {
         try {
             // Criar encomenda
             $stmt = $db->prepare("
-                INSERT INTO encomendas (utilizador_id, subtotal, envio, iva, total, stripe_payment_id, estado)
-                VALUES (?, ?, ?, ?, ?, ?, 'pago')
+                INSERT INTO encomendas (utilizador_id, subtotal, envio, iva, total, metodo_pagamento, stripe_payment_id, morada, cidade, codigo_postal, telefone, estado)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pago')
             ");
-            $stmt->execute([$userId, $subtotal, $envio, $iva, $total, $stripePaymentId]);
+            $stmt->execute([$userId, $subtotal, $envio, $iva, $total, $metodo, $stripePaymentId, $morada, $cidade, $codigoPostal, $telefone]);
             $encomendaId = $db->lastInsertId();
 
             // Inserir itens

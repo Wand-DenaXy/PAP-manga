@@ -157,11 +157,7 @@ $basePath    = '';
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.65s, transform 0.65s; }
     .reveal.visible { opacity: 1; transform: none; }
 
-    /* ─── FOOTER ─── */
-    footer { background: var(--black); color: white; padding: 40px 80px; display: flex; align-items: center; justify-content: space-between; }
-    .footer-logo { font-family: var(--font-display); font-size: 1rem; font-weight: 900; letter-spacing: 0.08em; }
-    .footer-logo span { color: var(--accent); }
-    .footer-copy { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); }
+    /* ─── FOOTER (via footer.php) ─── */
 
     @media (max-width: 1100px) {
       .mp-layout { grid-template-columns: 1fr; }
@@ -176,6 +172,34 @@ $basePath    = '';
       .my-products-section { padding: 40px 24px; }
       footer { padding: 32px 24px; flex-direction: column; gap: 12px; }
     }
+
+    /* ─── PRODUCT DRAWER ─── */
+    .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); z-index: 3000; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+    .drawer-overlay.open { opacity: 1; pointer-events: all; }
+    .product-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 100vw; background: var(--white); z-index: 3001; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); overflow-y: auto; display: flex; flex-direction: column; box-shadow: -8px 0 40px rgba(0,0,0,0.18); }
+    .drawer-overlay.open .product-drawer { transform: translateX(0); }
+    .drawer-cover { width: 100%; aspect-ratio: 5/3; display: flex; align-items: flex-end; padding: 28px; position: relative; flex-shrink: 0; }
+    .drawer-close { position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,0.45); border: none; border-radius: 50%; width: 38px; height: 38px; color: white; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.18s; }
+    .drawer-close:hover { background: var(--accent); }
+    .drawer-body { padding: 28px 32px 40px; flex: 1; display: flex; flex-direction: column; }
+    .drawer-type { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    .drawer-title { font-family: var(--font-display); font-size: 1.4rem; font-weight: 900; line-height: 1.18; margin-bottom: 4px; }
+    .drawer-author { font-size: 0.88rem; color: var(--grey); margin-bottom: 18px; }
+    .drawer-sep { border: none; border-top: 1.5px solid var(--light-grey); margin: 2px 0 16px; }
+    .drawer-desc { font-size: 0.88rem; line-height: 1.75; color: var(--grey); margin-bottom: 20px; }
+    .drawer-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .drawer-meta-item { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); background: var(--off-white); padding: 5px 11px; border-radius: 4px; }
+    .drawer-price-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .drawer-old-price { font-family: var(--font-mono); font-size: 0.95rem; color: var(--grey); text-decoration: line-through; }
+    .drawer-price { font-family: var(--font-display); font-size: 2.1rem; font-weight: 900; }
+    .drawer-stock { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; margin-left: auto; align-self: center; }
+    .stock-ok  { background: #e8faf0; color: #1a7a45; }
+    .stock-low { background: #fff4e0; color: #c07a00; }
+    .stock-out { background: #fdecea; color: #c0392b; }
+    .drawer-add-btn { background: var(--black); color: white; border: none; padding: 16px; border-radius: 10px; font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase; cursor: pointer; transition: all 0.22s; width: 100%; margin-top: auto; }
+    .drawer-add-btn:hover:not([disabled]) { background: var(--accent); box-shadow: 0 8px 24px var(--glow); transform: translateY(-2px); }
+    .drawer-add-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+    @media (max-width: 520px) { .product-drawer { width: 100vw; } }
   </style>
 </head>
 <body>
@@ -326,11 +350,7 @@ $basePath    = '';
     </div>
   </div>
 
-  <!-- ═══ FOOTER ═══ -->
-  <footer>
-    <span class="footer-logo">Manga<span>Verse</span></span>
-    <span class="footer-copy">© 2026 MangaVerse. Todos os direitos reservados.</span>
-  </footer>
+  <?php require_once 'assets/includes/footer.php'; ?>
 
   <script>
   $(document).ready(function() {
@@ -444,6 +464,14 @@ $basePath    = '';
           } else {
             Swal.fire({ icon: 'error', title: 'Erro', text: res.message, confirmButtonColor: '#e8002d' });
           }
+        },
+        error: function(xhr) {
+          var data = xhr.responseJSON || {};
+          if (data.redirect) {
+            Swal.fire({ icon: 'info', title: 'Login necessário', text: 'Precisas de fazer login para adicionar ao carrinho.', confirmButtonColor: '#0a0a0a', confirmButtonText: 'Ir para Login' }).then(function() { window.location.href = data.redirect; });
+          } else {
+            Swal.fire({ icon: 'error', title: 'Erro', text: data.message || 'Não foi possível adicionar ao carrinho.', confirmButtonColor: '#e8002d' });
+          }
         }
       });
     });
@@ -503,7 +531,121 @@ $basePath    = '';
       entries.forEach(function(entry) { if (entry.isIntersecting) entry.target.classList.add('visible'); });
     }, { threshold: 0.1 });
     document.querySelectorAll('.reveal').forEach(function(el) { obs.observe(el); });
+
+    // ── Product Drawer ──
+    var _drawerId = null;
+
+    function openDrawer(id) {
+      _drawerId = id;
+      $.getJSON('produto.php', { id: id }, function(res) {
+        if (!res.success) return;
+        var p = res.produto;
+
+        $('#drawer-cover').css('background', 'linear-gradient(160deg,' + p.cor1 + ',' + p.cor2 + ')');
+
+        var badgeLabel = { new: 'Novo', hot: '🔥 Hot', sale: 'Sale' }[p.badge] || '';
+        var badgeClass = { new: 'badge-new', hot: 'badge-hot', sale: 'badge-sale' }[p.badge] || '';
+        if (p.badge) {
+          $('#drawer-badge').attr('class', 'drawer-badge listing-badge ' + badgeClass).text(badgeLabel).show();
+        } else {
+          $('#drawer-badge').hide();
+        }
+
+        var typeLabel = p.categoria_slug === 'manga' ? '// Mangá' : p.categoria_slug === 'livro' ? '// Livro' : '// ' + p.categoria_nome;
+        $('#drawer-type').text(typeLabel);
+        $('#drawer-title').text(p.nome + (p.volume ? ' — ' + p.volume : ''));
+        $('#drawer-author').text('por ' + p.autor);
+        $('#drawer-desc').text(p.descricao || 'Sem descrição disponível.');
+
+        var meta = '';
+        var condLabel = p.condicao === 'novo' ? 'Novo' : 'Usado (' + p.condicao_pct + '%)';
+        meta += '<span class="drawer-meta-item">✅ ' + condLabel + '</span>';
+        if (p.vendedor_nome) meta += '<span class="drawer-meta-item">👤 ' + $('<span>').text(p.vendedor_nome).html() + '</span>';
+        $('#drawer-meta').html(meta);
+
+        if (p.preco_antigo) {
+          $('#drawer-old-price').text(parseFloat(p.preco_antigo).toFixed(2) + '€').show();
+        } else {
+          $('#drawer-old-price').hide();
+        }
+        $('#drawer-price').text(parseFloat(p.preco).toFixed(2) + '€');
+
+        var stockClass = p.stock > 5 ? 'stock-ok' : p.stock > 0 ? 'stock-low' : 'stock-out';
+        var stockLabel = p.stock > 5 ? 'Em Stock' : p.stock > 0 ? p.stock + ' restantes' : 'Esgotado';
+        $('#drawer-stock').attr('class', 'drawer-stock ' + stockClass).text(stockLabel);
+        $('#drawer-add-btn').prop('disabled', p.stock <= 0).text(p.stock > 0 ? '🛒 Adicionar ao Carrinho' : 'Esgotado');
+
+        $('#drawer-overlay').addClass('open');
+      });
+    }
+
+    $('#drawer-overlay').on('click', function(e) { if (e.target === this) $(this).removeClass('open'); });
+    $('#drawer-close').on('click', function() { $('#drawer-overlay').removeClass('open'); });
+    $(document).on('keydown', function(e) { if (e.key === 'Escape') $('#drawer-overlay').removeClass('open'); });
+
+    $(document).on('click', '.listing-card', function(e) {
+      if ($(e.target).closest('.add-cart-btn').length) return;
+      var id = $(this).find('.add-cart-btn').data('id');
+      if (id) openDrawer(id);
+    });
+
+    $('#drawer-add-btn').on('click', function() {
+      if (!_drawerId) return;
+      var btn = $(this);
+      $.ajax({
+        url: 'assets/controller/controllerCarrinho.php',
+        method: 'POST',
+        data: { acao: 'adicionar', produto_id: _drawerId },
+        dataType: 'json',
+        success: function(res) {
+          if (res.success) {
+            updateCartCount(res.total_itens);
+            btn.text('✓ Adicionado!');
+            setTimeout(function() { btn.text('🛒 Adicionar ao Carrinho'); }, 1800);
+            Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', title: '<span style="font-family:Orbitron;font-size:0.78rem">Adicionado!</span>', showConfirmButton: false, timer: 2200, timerProgressBar: true, background: '#0a0a0a', color: '#fff', iconColor: '#e8002d' });
+          } else if (res.redirect) {
+            $('#drawer-overlay').removeClass('open');
+            Swal.fire({ icon: 'info', title: 'Login necessário', text: 'Precisas de fazer login para adicionar ao carrinho.', confirmButtonColor: '#0a0a0a', confirmButtonText: 'Ir para Login' }).then(function() { window.location.href = res.redirect; });
+          } else {
+            Swal.fire({ icon: 'error', title: 'Erro', text: res.message, confirmButtonColor: '#e8002d' });
+          }
+        },
+        error: function(xhr) {
+          var data = xhr.responseJSON || {};
+          if (data.redirect) {
+            $('#drawer-overlay').removeClass('open');
+            Swal.fire({ icon: 'info', title: 'Login necessário', confirmButtonColor: '#0a0a0a', confirmButtonText: 'Ir para Login' }).then(function() { window.location.href = data.redirect; });
+          } else {
+            Swal.fire({ icon: 'error', title: 'Erro', text: data.message || 'Erro ao adicionar ao carrinho.', confirmButtonColor: '#e8002d' });
+          }
+        }
+      });
+    });
   });
   </script>
+
+  <!-- ═══ PRODUCT DRAWER ═══ -->
+  <div class="drawer-overlay" id="drawer-overlay">
+    <div class="product-drawer" id="product-drawer">
+      <div class="drawer-cover" id="drawer-cover">
+        <button class="drawer-close" id="drawer-close" title="Fechar">✕</button>
+        <span class="drawer-badge" id="drawer-badge" style="display:none"></span>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-type" id="drawer-type"></div>
+        <div class="drawer-title" id="drawer-title"></div>
+        <div class="drawer-author" id="drawer-author"></div>
+        <hr class="drawer-sep">
+        <p class="drawer-desc" id="drawer-desc"></p>
+        <div class="drawer-meta" id="drawer-meta"></div>
+        <div class="drawer-price-row">
+          <span class="drawer-old-price" id="drawer-old-price" style="display:none"></span>
+          <span class="drawer-price" id="drawer-price"></span>
+          <span class="drawer-stock" id="drawer-stock"></span>
+        </div>
+        <button class="drawer-add-btn" id="drawer-add-btn">🛒 Adicionar ao Carrinho</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
